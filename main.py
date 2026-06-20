@@ -1,6 +1,7 @@
 import os
 import logging
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 # --------------------
@@ -18,54 +19,86 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-# --------------------
-# BOT
-# --------------------
-bot = commands.Bot(
-    command_prefix="!",
-    intents=intents
-)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 # --------------------
-# EVENTS
+# READY
 # --------------------
 @bot.event
 async def on_ready():
-    logging.info(f"Bot online: {bot.user}")
-
-@bot.event
-async def on_command_error(ctx, error):
-    logging.error(f"Command Fehler: {error}")
-    await ctx.send("❌ Beim Ausführen des Befehls ist ein Fehler aufgetreten.")
+    await bot.tree.sync()
+    logging.info(f"Bot online als {bot.user}")
 
 # --------------------
-# COMMANDS
+# GLOBAL ERROR HANDLER (WICHTIG)
 # --------------------
-@bot.command()
-async def ping(ctx):
-    await ctx.send("🏓 Pong")
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error):
+    logging.error(f"Slash Error: {error}")
 
-@bot.command()
-async def info(ctx):
-    await ctx.send(
-        f"🤖 Bot: {bot.user.name}\n"
-        f"🆔 ID: {bot.user.id}"
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                "❌ Fehler beim Command.",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "❌ Fehler beim Command.",
+                ephemeral=True
+            )
+    except:
+        pass
+
+# --------------------
+# SLASH: /ping
+# --------------------
+@bot.tree.command(name="ping", description="Bot antwortet mit Pong")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message("🏓 Pong")
+
+# --------------------
+# SLASH: /info
+# --------------------
+@bot.tree.command(name="info", description="Bot Infos anzeigen")
+async def info(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        f"🤖 Bot: {bot.user}\n🆔 ID: {bot.user.id}"
     )
 
 # --------------------
-# MESSAGE LOGGING
+# SLASH: /kick
 # --------------------
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
+@bot.tree.command(name="kick", description="User kicken")
+@app_commands.checks.has_permissions(kick_members=True)
+async def kick(interaction: discord.Interaction, member: discord.Member, reason: str = "Kein Grund"):
+    try:
+        await member.kick(reason=reason)
+        await interaction.response.send_message(
+            f"👢 {member} wurde gekickt. Grund: {reason}"
+        )
+    except Exception as e:
+        await interaction.response.send_message(
+            f"❌ Fehler: {e}",
+            ephemeral=True
+        )
 
-    logging.info(
-        f"[{message.guild}] "
-        f"{message.author}: {message.content}"
-    )
-
-    await bot.process_commands(message)
+# --------------------
+# SLASH: /ban
+# --------------------
+@bot.tree.command(name="ban", description="User bannen")
+@app_commands.checks.has_permissions(ban_members=True)
+async def ban(interaction: discord.Interaction, member: discord.Member, reason: str = "Kein Grund"):
+    try:
+        await member.ban(reason=reason)
+        await interaction.response.send_message(
+            f"🔨 {member} wurde gebannt. Grund: {reason}"
+        )
+    except Exception as e:
+        await interaction.response.send_message(
+            f"❌ Fehler: {e}",
+            ephemeral=True
+        )
 
 # --------------------
 # START
@@ -73,6 +106,6 @@ async def on_message(message):
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
-    logging.error("TOKEN nicht gefunden!")
+    logging.error("TOKEN fehlt!")
 else:
     bot.run(TOKEN)
