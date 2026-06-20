@@ -1,6 +1,9 @@
 import os
 import time
 import logging
+import discord
+from discord import app_commands
+from discord.ext import commands
 
 START_TIME = time.time()
 
@@ -35,14 +38,6 @@ async def on_ready():
         logging.info("🚀 STATUS: ONLINE")
         logging.info("===================================")
 
-        try:
-            channel_id = 1450245897819521166
-            channel = await bot.fetch_channel(channel_id)
-
-            await channel.send("🔄 Bot wurde neu gestartet und ist wieder online.")
-        except Exception as e:
-            log_error("startup_message", e)
-
     except Exception as e:
         log_error("on_ready", e)
 
@@ -62,7 +57,7 @@ async def on_app_command_error(interaction, error):
         pass
 
 # --------------------
-# COMMAND ERROR
+# TEXT ERROR HANDLER
 # --------------------
 @bot.event
 async def on_command_error(ctx, error):
@@ -70,7 +65,7 @@ async def on_command_error(ctx, error):
     await ctx.send("❌ Fehler beim Command.")
 
 # --------------------
-# SLASH COMMANDS
+# COMMANDS
 # --------------------
 @bot.tree.command(name="ping")
 async def ping(interaction):
@@ -99,7 +94,7 @@ async def ban(interaction, member: discord.Member, reason: str = "Kein Grund"):
         log_error("ban", e)
 
 # --------------------
-# START SAFE
+# START
 # --------------------
 TOKEN = os.getenv("TOKEN")
 
@@ -107,7 +102,4 @@ if not TOKEN:
     logging.error("TOKEN fehlt → Bot stoppt")
     exit(1)
 
-try:
-    bot.run(TOKEN)
-except Exception as e:
-    log_error("bot_run", e)
+bot.run(TOKEN)
