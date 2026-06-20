@@ -5,10 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# --------------------
-# BASIC SETUP
-# --------------------
-START_TIME = time.time()
+START = time.time()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,100 +25,84 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     try:
         await bot.tree.sync()
-        logging.info("Bot online & ready")
+        logging.info(f"Online als {bot.user}")
     except Exception as e:
-        logging.error(f"on_ready error: {e}")
+        logging.error(f"on_ready: {e}")
 
 # --------------------
-# ERROR HANDLER
+# SOFT ERROR HANDLING
 # --------------------
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     logging.error(f"{type(error).__name__}: {error}")
 
     try:
-        msg = "❌ Fehler im Command"
+        msg = "❌ Fehler beim Command (wird automatisch behandelt)"
+
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
         else:
             await interaction.response.send_message(msg, ephemeral=True)
-    except:
-        pass
+
+    except Exception as e:
+        logging.error(f"error_handler: {e}")
 
 # --------------------
-# INFO COMMANDS
+# PING (ECHTE LATENZ)
 # --------------------
-@bot.tree.command(name="ping", description="Test Command")
+@bot.tree.command(name="ping")
 async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("🏓 Pong")
+    try:
+        start = time.perf_counter()
 
-@bot.tree.command(name="info", description="Bot Info")
+        await interaction.response.send_message("🏓 Ping wird gemessen...")
+        end = time.perf_counter()
+
+        api_latency = round(bot.latency * 1000)
+        response_latency = round((end - start) * 1000)
+
+        await interaction.edit_original_response(
+            content=f"🏓 Pong\n📡 API: {api_latency}ms\n⚡ Response: {response_latency}ms"
+        )
+
+    except Exception as e:
+        logging.error(f"ping: {e}")
+
+# --------------------
+# INFO
+# --------------------
+@bot.tree.command(name="info")
 async def info(interaction: discord.Interaction):
-    uptime = round(time.time() - START_TIME, 1)
-    await interaction.response.send_message(f"🤖 {bot.user} | {uptime}s uptime")
-
-@bot.tree.command(name="serverinfo", description="Server Infos")
-async def serverinfo(interaction: discord.Interaction):
-    guild = interaction.guild
+    uptime = int(time.time() - START)
     await interaction.response.send_message(
-        f"📡 {guild.name}\n👥 Members: {guild.member_count}"
-    )
-
-@bot.tree.command(name="userinfo", description="User Infos")
-async def userinfo(interaction: discord.Interaction, user: discord.Member = None):
-    user = user or interaction.user
-    await interaction.response.send_message(
-        f"👤 {user}\n🆔 {user.id}\n📅 Joined: {user.joined_at}"
+        f"🤖 {bot.user}\n⏱ Uptime: {uptime}s"
     )
 
 # --------------------
-# MODERATION (ADMIN ONLY)
+# MODERATION (STABIL)
 # --------------------
-@bot.tree.command(name="kick", description="User kicken")
+@bot.tree.command(name="kick")
 @app_commands.checks.has_permissions(kick_members=True)
 async def kick(interaction: discord.Interaction, member: discord.Member, reason: str = "Kein Grund"):
-    await member.kick(reason=reason)
-    await interaction.response.send_message(f"👢 {member} gekickt")
+    try:
+        await member.kick(reason=reason)
+        await interaction.response.send_message(f"👢 {member} gekickt")
+    except Exception as e:
+        logging.error(f"kick: {e}")
+        await interaction.response.send_message("❌ Kick fehlgeschlagen", ephemeral=True)
 
-@bot.tree.command(name="ban", description="User bannen")
+@bot.tree.command(name="ban")
 @app_commands.checks.has_permissions(ban_members=True)
 async def ban(interaction: discord.Interaction, member: discord.Member, reason: str = "Kein Grund"):
-    await member.ban(reason=reason)
-    await interaction.response.send_message(f"🔨 {member} gebannt")
+    try:
+        await member.ban(reason=reason)
+        await interaction.response.send_message(f"🔨 {member} gebannt")
+    except Exception as e:
+        logging.error(f"ban: {e}")
+        await interaction.response.send_message("❌ Ban fehlgeschlagen", ephemeral=True)
 
 # --------------------
-# LINK FILTER (BASIC AUTOMOD)
-# --------------------
-INVITE_BLOCK = ["discord.gg/", "discord.com/invite/"]
-
-WHITELIST = ["youtube.com", "youtu.be", "github.com"]
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    content = message.content.lower()
-
-    # Invite Block
-    if any(x in content for x in INVITE_BLOCK):
-        if not message.author.guild_permissions.administrator:
-            await message.delete()
-            await message.channel.send("🚫 Invite-Links sind nicht erlaubt", delete_after=5)
-            return
-
-    # Link Whitelist
-    if "http" in content:
-        if not any(x in content for x in WHITELIST):
-            if not message.author.guild_permissions.administrator:
-                await message.delete()
-                await message.channel.send("🚫 Link nicht erlaubt", delete_after=5)
-                return
-
-    await bot.process_commands(message)
-
-# --------------------
-# START BOT
+# START
 # --------------------
 TOKEN = os.getenv("TOKEN")
 
