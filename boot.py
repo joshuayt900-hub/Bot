@@ -1,40 +1,21 @@
 import os
-import discord
-from discord.ext import commands
-import functions
+import logging
+from main import start_bot
 
-# --------------------
-# INTENTS
-# --------------------
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
 
-# --------------------
-# BOT
-# --------------------
-bot = commands.Bot(command_prefix="!", intents=intents)
+logging.info("🚀 Boot-Datei gestartet")
 
-# --------------------
-# READY
-# --------------------
-@bot.event
-async def on_ready():
-    await bot.tree.sync()
-    print(f"🤖 Bot online als {bot.user}")
-
-# --------------------
-# LOAD FUNCTIONS
-# --------------------
-functions.register(bot)
-
-# --------------------
-# START BOT
-# --------------------
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
-    print("TOKEN fehlt")
+    logging.error("TOKEN fehlt → Bot stoppt")
     exit(1)
 
-bot.run(TOKEN)
+try:
+    start_bot(TOKEN)
+except Exception as e:
+    logging.error(f"Boot Fehler: {type(e).__name__}: {e}")
