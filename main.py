@@ -1,9 +1,6 @@
-  import os
+import os
 import time
 import logging
-import discord
-from discord import app_commands
-from discord.ext import commands
 
 START_TIME = time.time()
 
