@@ -6,15 +6,26 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# --------------------
-# CORE
-# --------------------
 START = time.time()
 
+# --------------------
+# LOGGING (CLEAN MODE)
+# --------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )
+
+# Discord intern ruhig stellen
+logging.getLogger("discord").setLevel(logging.ERROR)
+logging.getLogger("discord.client").setLevel(logging.ERROR)
+logging.getLogger("discord.gateway").setLevel(logging.ERROR)
+logging.getLogger("discord.voice_client").setLevel(logging.CRITICAL)
+
+# --------------------
+# OWNER ROLE
+# --------------------
+OWNER_ROLE_ID = 1449769777470898226
 
 # --------------------
 # DATABASE
@@ -63,80 +74,63 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     try:
         await bot.tree.sync()
-        logging.info(f"Bot online als {bot.user}")
+        logging.info(f"Bot online: {bot.user}")
     except Exception as e:
         logging.error(f"on_ready error: {e}")
 
 # --------------------
-# GLOBAL ERROR HANDLER
+# ERROR HANDLER
 # --------------------
 @bot.tree.error
-async def on_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+async def on_error(interaction, error):
     logging.error(f"{type(error).__name__}: {error}")
-
     try:
-        msg = "❌ Fehler im Command"
-
         if interaction.response.is_done():
-            await interaction.followup.send(msg, ephemeral=True)
+            await interaction.followup.send("❌ Fehler", ephemeral=True)
         else:
-            await interaction.response.send_message(msg, ephemeral=True)
+            await interaction.response.send_message("❌ Fehler", ephemeral=True)
     except:
         pass
 
 # --------------------
-# PING
+# BASIC COMMANDS
 # --------------------
 @bot.tree.command(name="ping")
-async def ping(interaction: discord.Interaction):
-    try:
-        await interaction.response.send_message(
-            f"🏓 Pong | {round(bot.latency * 1000)}ms"
-        )
-    except Exception as e:
-        logging.error(f"ping error: {e}")
+async def ping(interaction):
+    await interaction.response.send_message(f"🏓 {round(bot.latency * 1000)}ms")
 
-# --------------------
-# INFO
-# --------------------
 @bot.tree.command(name="info")
-async def info(interaction: discord.Interaction):
-    try:
-        uptime = int(time.time() - START)
-        await interaction.response.send_message(
-            f"🤖 {bot.user}\n⏱ {uptime}s uptime"
-        )
-    except Exception as e:
-        logging.error(f"info error: {e}")
+async def info(interaction):
+    uptime = int(time.time() - START)
+    await interaction.response.send_message(f"🤖 {bot.user} | {uptime}s")
 
 # --------------------
 # BAN SYSTEM
 # --------------------
 @bot.tree.command(name="ban")
 @app_commands.checks.has_permissions(ban_members=True)
-async def ban(interaction: discord.Interaction, member: discord.Member, reason: str = "Kein Grund"):
+async def ban(interaction, member: discord.Member, reason: str = "Kein Grund"):
     try:
         await member.ban(reason=reason)
         add_ban(member.id, str(member), reason)
-        await interaction.response.send_message(f"🔨 {member} gebannt")
+        await interaction.response.send_message("🔨 gebannt")
     except Exception as e:
         logging.error(f"ban error: {e}")
         await interaction.response.send_message("❌ Ban fehlgeschlagen", ephemeral=True)
 
 @bot.tree.command(name="unban")
 @app_commands.checks.has_permissions(ban_members=True)
-async def unban(interaction: discord.Interaction, user_id: str):
+async def unban(interaction, user_id: str):
     try:
         user = await bot.fetch_user(int(user_id))
         await interaction.guild.unban(user)
 
         remove_ban(user_id)
 
-        await interaction.response.send_message("♻️ entbannt + DB aktualisiert")
+        await interaction.response.send_message("♻️ unban erfolgreich")
 
     except Exception as e:
         logging.error(f"unban error: {e}")
-
         try:
             if interaction.response.is_done():
                 await interaction.followup.send("❌ Unban fehlgeschlagen", ephemeral=True)
@@ -147,30 +141,29 @@ async def unban(interaction: discord.Interaction, user_id: str):
 
 @bot.tree.command(name="bans")
 @app_commands.checks.has_permissions(ban_members=True)
-async def bans(interaction: discord.Interaction):
+async def bans(interaction):
     try:
         rows = get_bans()
 
         if not rows:
-            return await interaction.response.send_message("Keine Bans gespeichert.")
+            return await interaction.response.send_message("Keine Bans")
 
-        text = "\n".join([f"{u} | {name} | {reason}" for u, name, reason in rows])
+        text = "\n".join([f"{u} | {n} | {r}" for u, n, r in rows])
         await interaction.response.send_message(text[:1900])
 
     except Exception as e:
         logging.error(f"bans error: {e}")
-        await interaction.response.send_message("❌ Fehler beim Laden", ephemeral=True)
+        await interaction.response.send_message("❌ Fehler", ephemeral=True)
 
 # --------------------
-# CLEAR (SAFE)
+# CLEAR
 # --------------------
 @bot.tree.command(name="clear")
 @app_commands.checks.has_permissions(manage_messages=True)
-async def clear(interaction: discord.Interaction, amount: int):
+async def clear(interaction, amount: int):
     try:
         if amount < 1:
             return await interaction.response.send_message("❌ min 1")
-
         if amount > 100:
             return await interaction.response.send_message("❌ max 100")
 
@@ -179,7 +172,7 @@ async def clear(interaction: discord.Interaction, amount: int):
         deleted = await interaction.channel.purge(limit=amount + 1)
 
         await interaction.followup.send(
-            f"🧹 {len(deleted)-1} Nachrichten gelöscht",
+            f"🧹 {len(deleted)-1} gelöscht",
             ephemeral=True
         )
 
@@ -189,6 +182,20 @@ async def clear(interaction: discord.Interaction, amount: int):
             await interaction.followup.send("❌ Clear fehlgeschlagen", ephemeral=True)
         except:
             pass
+
+# --------------------
+# EMERGENCY STOP
+# --------------------
+@bot.tree.command(name="emergency_stop")
+async def emergency_stop(interaction):
+    member = interaction.user
+
+    if not any(role.id == OWNER_ROLE_ID for role in member.roles):
+        return await interaction.response.send_message("❌ keine Rechte", ephemeral=True)
+
+    await interaction.response.send_message("🛑 Bot stoppt")
+    logging.warning(f"EMERGENCY STOP by {member}")
+    await bot.close()
 
 # --------------------
 # START
